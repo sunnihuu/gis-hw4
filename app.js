@@ -1,78 +1,65 @@
-// Paths—style.json at ./ , CSV at ./data/...
-const STYLE_URL = "./style.json";
+// ---------- Paths ----------
+const STYLE_URL = "./style.json"; // style.json 与 index.html 同目录
 const CSV_URL   = "./data/Ghost_Bikes_with_google_coords.csv";
 
-// Helper: parse "YYYY-MM-DD" or "YYYY/MM/DD" → 202003 (Number)
+// ---------- Helpers ----------
 function ymFromDate(s) {
   if (!s) return null;
   const m = String(s).trim().match(/^\s*(\d{4})[-\/](\d{1,2})/);
   if (!m) return null;
   const y = +m[1], mo = +m[2];
   if (!y || !mo) return null;
-  return y * 100 + mo;
+  return y * 100 + mo; // e.g. 2020-03 -> 202003
 }
 function ymLabel(n) { return String(n).replace(/^(\d{4})(\d{2})$/, "$1-$2"); }
-
-// Build UI options
 function fillSelect(sel, items) {
   sel.innerHTML = items.map((lab, i) => `<option value="${i}">${lab}</option>`).join("");
 }
 
-// DOM
-const range      = document.getElementById("range");
-const fromYM     = document.getElementById("fromYM");
-const toYM       = document.getElementById("toYM");
-const minLabel   = document.getElementById("minLabel");
-const curLabel   = document.getElementById("curLabel");
-const maxLabel   = document.getElementById("maxLabel");
-const boroughSel = document.getElementById("boroughSel");
+// ---------- Grab UI ----------
+const range        = document.getElementById("range");
+const fromYM       = document.getElementById("fromYM");
+const toYM         = document.getElementById("toYM");
+const minLabel     = document.getElementById("minLabel");
+const curLabel     = document.getElementById("curLabel");
+const maxLabel     = document.getElementById("maxLabel");
+const boroughSel   = document.getElementById("boroughSel");
 const labelsToggle = document.getElementById("labelsToggle");
 
-// NOTE: we create the Map after loading the style JSON below (inside init)
-// to avoid issues when the page is served from file:// or when the style
-// needs to be fetched first. The `map` variable will be created inside init().
+// 基本防御：如果 UI 元素缺失就停止
+if (!range || !fromYM || !toYM || !minLabel || !curLabel || !maxLabel || !boroughSel || !labelsToggle) {
+  console.error("Missing one or more UI elements in index.html");
+}
 
-// Load CSV → GeoJSON, then initialize layers & UI
+// ---------- Init ----------
 (async function init() {
-  // Load style JSON first, then create the map using the parsed object.
-  // This avoids problems when opening `index.html` via file:// in the browser.
+  // 1) 加载 style.json 并创建地图
   let map;
   try {
-    // Prefer inline style JSON in the page (no fetch). If it's not present,
-    // fall back to fetching the local `style.json`.
-    let styleObj = null;
-    const styleEl = document.getElementById('map-style');
-    if (styleEl && styleEl.textContent && styleEl.textContent.trim()) {
-      try {
-        styleObj = JSON.parse(styleEl.textContent);
-      } catch (parseErr) {
-        console.error('Failed to parse inline style JSON:', parseErr);
-        // fall through to try fetch
-      }
-    }
-
-    if (!styleObj) {
-      const styleResp = await fetch(STYLE_URL);
-      if (!styleResp.ok) throw new Error(`Failed to fetch style.json: ${styleResp.status} ${styleResp.statusText}`);
-      styleObj = await styleResp.json();
-    }
+    const styleResp = await fetch(STYLE_URL);
+    if (!styleResp.ok) throw new Error(`Failed to fetch style.json: ${styleResp.status} ${styleResp.statusText}`);
+    const styleObj = await styleResp.json();
 
     map = new maplibregl.Map({
       container: "map",
       style: styleObj,
-      center: [-73.9857, 40.7484], // Midtown NYC
-      zoom: 11
+      center: [-73.9857, 40.7484], // NYC
+      zoom: 8.5
+      
     });
-
     map.addControl(new maplibregl.NavigationControl({ showZoom: true }), "top-right");
     map.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: "imperial" }));
   } catch (err) {
     console.error("Error loading style.json or creating map:", err);
-    // Still attempt to continue — CSV/geojson processing can proceed but map won't render.
   }
+  if (!map) return; // 早退：style.json 失败则不继续
 
-  const csvText = await fetch(CSV_URL).then(r => r.text());
-  const parsed  = Papa.parse(csvText, { header: true, skipEmptyLines: true });
+  // 2) 加载 CSV → 解析为 GeoJSON
+  const csvText = await fetch(CSV_URL).then(r => {
+    if (!r.ok) throw new Error(`Failed to fetch CSV: ${r.status} ${r.statusText}`);
+    return r.text();
+  });
+  const parsed = Papa.parse(csvText, { header: true, skipEmptyLines: true });
 
   const feats = [];
   const boroughSet = new Set();
@@ -84,7 +71,6 @@ const labelsToggle = document.getElementById("labelsToggle");
 
     const ym = ymFromDate(row.date ?? row.Date);
     const borough = (row.borough ?? row.Borough ?? "").trim();
-
     if (borough) boroughSet.add(borough);
 
     feats.push({
@@ -101,17 +87,16 @@ const labelsToggle = document.getElementById("labelsToggle");
       }
     });
   }
-
   const geojson = { type: "FeatureCollection", features: feats };
 
-  // Year-month axis
+  // 3) Year-Month 轴 & UI 初始化
   const yms = Array.from(new Set(geojson.features
     .map(f => f.properties.yearmonth)
-    .filter(v => Number.isFinite(v)))).sort((a, b) => a - b);
+    .filter(v => Number.isFinite(v))))
+    .sort((a, b) => a - b);
 
   const labels = yms.map(ymLabel);
 
-  // Populate UI
   fillSelect(fromYM, labels);
   fillSelect(toYM, labels);
   range.min = 0;
@@ -124,16 +109,15 @@ const labelsToggle = document.getElementById("labelsToggle");
   curLabel.textContent = labels[range.value] || "–";
   maxLabel.textContent = labels[range.max] || "–";
 
-  // Borough options
+  // Borough 下拉
   const boroughs = Array.from(boroughSet).sort();
   boroughSel.innerHTML = `<option value="">All</option>` +
     boroughs.map(b => `<option value="${b}">${b}</option>`).join("");
 
+  // 4) 地图加载后挂载源与图层
   map.on("load", () => {
-    // Source
     map.addSource("ghost_bikes", { type: "geojson", data: geojson });
 
-    // Circles
     map.addLayer({
       id: "ghost_bikes_circles",
       type: "circle",
@@ -147,7 +131,6 @@ const labelsToggle = document.getElementById("labelsToggle");
       }
     });
 
-    // Labels (default ON; toggled by checkbox)
     map.addLayer({
       id: "ghost_bikes_labels",
       type: "symbol",
@@ -167,7 +150,7 @@ const labelsToggle = document.getElementById("labelsToggle");
       minzoom: 13.5
     });
 
-    // Hover tooltip
+    // 交互
     const hoverPopup = new maplibregl.Popup({ closeButton: false, closeOnClick: false });
     map.on("mousemove", "ghost_bikes_circles", (e) => {
       map.getCanvas().style.cursor = "pointer";
@@ -181,7 +164,6 @@ const labelsToggle = document.getElementById("labelsToggle");
       hoverPopup.remove();
     });
 
-    // Click popup
     map.on("click", "ghost_bikes_circles", (e) => {
       const p = e.features?.[0]?.properties || {};
       const html = `
@@ -196,7 +178,7 @@ const labelsToggle = document.getElementById("labelsToggle");
       new maplibregl.Popup({ offset: 12 }).setLngLat(e.lngLat).setHTML(html).addTo(map);
     });
 
-    // Filtering
+    // 过滤
     function applyFilter() {
       if (!yms.length) return;
       const iFrom = Math.min(+fromYM.value, +toYM.value);
@@ -206,33 +188,31 @@ const labelsToggle = document.getElementById("labelsToggle");
       const curIdx = +range.value;
       curLabel.textContent = labels[curIdx] || "–";
 
-      // Base time filter
-      const timeFilter = ["all",
+      const timeFilter = [
+        "all",
         [">=", ["to-number", ["get", "yearmonth"]], lo],
         ["<=", ["to-number", ["get", "yearmonth"]], hi]
       ];
-
       const selectedBorough = boroughSel.value;
       const fullFilter = selectedBorough
-        ? ["all", timeFilter, ["==", ["get", "borough"], selectedBorough]]
+        ? ["all", ...timeFilter.slice(1), ["==", ["get", "borough"], selectedBorough]]
         : timeFilter;
 
       map.setFilter("ghost_bikes_circles", fullFilter);
       map.setFilter("ghost_bikes_labels",  fullFilter);
     }
 
-    // Events
+    // 事件
     fromYM.addEventListener("change", applyFilter);
     toYM.addEventListener("change", applyFilter);
     boroughSel.addEventListener("change", applyFilter);
-    range.addEventListener("input", () => { curLabel.textContent = labels[+range.value] || "–"; });
+    range.addEventListener("input",  () => { curLabel.textContent = labels[+range.value] || "–"; });
     range.addEventListener("change", applyFilter);
-
     labelsToggle.addEventListener("change", () => {
       map.setLayoutProperty("ghost_bikes_labels", "visibility", labelsToggle.checked ? "visible" : "none");
     });
 
-    // Initial
+    // 初始过滤
     applyFilter();
   });
 })();
