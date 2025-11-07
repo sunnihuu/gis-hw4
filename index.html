@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Ghost Bikes — Interactive Map</title>
+
+  <!-- MapLibre CSS -->
+  <link href="https://unpkg.com/maplibre-gl@3.6.1/dist/maplibre-gl.css" rel="stylesheet"/>
+
+  <!-- App CSS -->
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <!-- Map container -->
+  <div id="map" aria-label="Interactive map showing ghost bikes in NYC"></div>
+
+  <!-- UI panel -->
+  <section class="panel" aria-label="Map controls">
+    <h1 class="panel-title">Ghost Bikes — Filters</h1>
+
+    <div class="row">
+      <label for="fromYM">From</label>
+      <select id="fromYM" aria-label="Filter from year-month"></select>
+    </div>
+
+    <div class="row">
+      <label for="toYM">To</label>
+      <select id="toYM" aria-label="Filter to year-month"></select>
+    </div>
+
+    <input id="range" type="range" min="0" max="0" value="0" step="1" aria-label="Year-month slider" />
+    <div class="row spread muted">
+      <span id="minLabel">–</span>
+      <span id="curLabel">–</span>
+      <span id="maxLabel">–</span>
+    </div>
+
+    <div class="row">
+      <label for="boroughSel">Borough</label>
+      <select id="boroughSel" aria-label="Filter by borough">
+        <option value="">All</option>
+      </select>
+    </div>
+
+    <div class="row">
+      <label for="labelsToggle">Labels</label>
+      <input id="labelsToggle" type="checkbox" checked aria-label="Toggle point labels"/>
+    </div>
+
+    <p class="muted small">Hover to see name. Click for details.</p>
+  </section>
+
+  <!-- Legend -->
+  <aside class="legend" aria-label="Map legend">
+    <h2 class="legend-title">Legend</h2>
+    <div class="row gap">
+      <span class="dot"></span>
+      <span>Ghost Bike memorial</span>
+    </div>
+  </aside>
+
+  <!-- MapLibre + PapaParse -->
+  <script src="https://unpkg.com/maplibre-gl@3.6.1/dist/maplibre-gl.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+  <!-- App JS -->
+  <script src="./app.js"></script>
+</body>
+</html>
