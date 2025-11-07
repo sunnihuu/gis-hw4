@@ -1,5 +1,5 @@
 // Paths—style.json at ./ , CSV at ./data/...
-const STYLE_URL = "./style.json"; 
+const STYLE_URL = "./style.json";
 const CSV_URL   = "./data/Ghost_Bikes_with_google_coords.csv";
 
 // Helper: parse "YYYY-MM-DD" or "YYYY/MM/DD" → 202003 (Number)
@@ -38,9 +38,24 @@ const labelsToggle = document.getElementById("labelsToggle");
   // This avoids problems when opening `index.html` via file:// in the browser.
   let map;
   try {
-    const styleResp = await fetch(STYLE_URL);
-    if (!styleResp.ok) throw new Error(`Failed to fetch style.json: ${styleResp.status} ${styleResp.statusText}`);
-    const styleObj = await styleResp.json();
+    // Prefer inline style JSON in the page (no fetch). If it's not present,
+    // fall back to fetching the local `style.json`.
+    let styleObj = null;
+    const styleEl = document.getElementById('map-style');
+    if (styleEl && styleEl.textContent && styleEl.textContent.trim()) {
+      try {
+        styleObj = JSON.parse(styleEl.textContent);
+      } catch (parseErr) {
+        console.error('Failed to parse inline style JSON:', parseErr);
+        // fall through to try fetch
+      }
+    }
+
+    if (!styleObj) {
+      const styleResp = await fetch(STYLE_URL);
+      if (!styleResp.ok) throw new Error(`Failed to fetch style.json: ${styleResp.status} ${styleResp.statusText}`);
+      styleObj = await styleResp.json();
+    }
 
     map = new maplibregl.Map({
       container: "map",
