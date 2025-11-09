@@ -1,5 +1,5 @@
 // ---------- Paths ----------
-const STYLE_URL = "./style.json"; // style.json 与 index.html 同目录
+const STYLE_URL = "https://demotiles.maplibre.org/style.json";
 const CSV_URL   = "./data/Ghost_Bikes_with_google_coords.csv";
 
 // ---------- Helpers ----------
@@ -45,7 +45,7 @@ if (!range || !fromYM || !toYM || !minLabel || !curLabel || !maxLabel || !boroug
       style: styleObj,
       center: [-73.9857, 40.7484], // NYC
       zoom: 8.5
-      
+
     });
     map.addControl(new maplibregl.NavigationControl({ showZoom: true }), "top-right");
     map.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: "imperial" }));
