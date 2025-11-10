@@ -1,23 +1,21 @@
-PROVENANCE / CODE SOURCES
-Assignment 04 — Representation & Interactivity  
-
 Basemap
-The basemap style was created in Maputnik using custom layer and color adjustments.  
-The map uses Protomaps tiles and glyphs via Protomaps API key.  
-The tile and glyph URLs were added manually, and the map center/zoom were set to NYC.
+The basemap style was created in Maputnik with custom layer and color adjustments.
+The map uses Protomaps tiles and glyphs via a Protomaps API key.
+Tile and glyph URLs were added manually, and the map center/zoom were set to NYC.
+I attempted to link my exported style.json directly into MapLibre, but due to unresolved path and asset-loading issues, I was not able to load the style successfully. I instead rebuilt the needed basemap properties manually in the JavaScript setup.
 
 Data
-The dataset (“Ghost_Bikes_with_google_coords.csv”) comes from my compiled ghost bike point data from hw 2 02 Making Data + Narrative Building.  
-PapaParse was used (via its documentation) to load the CSV in the browser, and the data was converted into a GeoJSON-like structure for MapLibre.
+The dataset (Ghost_Bikes_with_google_coords.csv) is my compiled ghost bike point data from HW02 Making Data + Narrative Building.
+PapaParse (following its documentation) was used to load the CSV in the browser, and the data was converted into a GeoJSON-like structure for MapLibre.
 
 Map & Interaction
-The project follows MapLibre GL JS documentation for setting up the map, sources, and layers.  
-Circle and label layers were added for the ghost bike points, with hover and click interactions.  
-Time-range filtering and borough filtering use MapLibre’s `setFilter()` with combined expressions.
+The project follows MapLibre GL JS documentation for setting up the map, sources, and layers.
+Circle and label layers were added for the ghost bike points, with hover and click interactions.
+Time-range and borough filtering use MapLibre’s setFilter() with combined expressions.
 
 UI
-The HTML/CSS layout is kept simple and lightweight so the map can be explored easily on its own.
+The HTML/CSS layout is intentionally simple and lightweight so the map can be explored without distraction.
 
 LLM Use
-ChatGPT / VS Code AI was used only for debugging help (e.g., API key issues, filter syntax) and for wording this PROVENANCE note.  
+ChatGPT / VS Code AI were used only for debugging support (e.g., API key errors, filter syntax) and for wording this provenance note.
 No complete code blocks were copied without modification or understanding.
