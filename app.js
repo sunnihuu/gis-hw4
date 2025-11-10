@@ -1,5 +1,4 @@
 // ---------- Paths ----------
-const STYLE_URL = "https://demotiles.maplibre.org/style.json";
 const CSV_URL   = "./data/Ghost_Bikes_with_google_coords.csv";
 
 // ---------- Helpers ----------
@@ -33,28 +32,15 @@ if (!range || !fromYM || !toYM || !minLabel || !curLabel || !maxLabel || !boroug
 
 // ---------- Init ----------
 (async function init() {
-  // 1) 加载 style.json 并创建地图
-  let map;
-  try {
-    const styleResp = await fetch(STYLE_URL);
-    if (!styleResp.ok) throw new Error(`Failed to fetch style.json: ${styleResp.status} ${styleResp.statusText}`);
-    const styleObj = await styleResp.json();
+  // Create Leaflet map with OpenStreetMap tiles
+  const map = L.map('map').setView([40.7484, -73.9857], 12);
 
-    map = new maplibregl.Map({
-      container: "map",
-      style: styleObj,
-      center: [-73.9857, 40.7484], // NYC
-      zoom: 8.5
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors',
+    maxZoom: 19
+  }).addTo(map);
 
-    });
-    map.addControl(new maplibregl.NavigationControl({ showZoom: true }), "top-right");
-    map.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: "imperial" }));
-  } catch (err) {
-    console.error("Error loading style.json or creating map:", err);
-  }
-  if (!map) return; // 早退：style.json 失败则不继续
-
-  // 2) 加载 CSV → 解析为 GeoJSON
+  // 2) Load CSV → parse to GeoJSON-like features
   const csvText = await fetch(CSV_URL).then(r => {
     if (!r.ok) throw new Error(`Failed to fetch CSV: ${r.status} ${r.statusText}`);
     return r.text();
@@ -87,14 +73,9 @@ if (!range || !fromYM || !toYM || !minLabel || !curLabel || !maxLabel || !boroug
       }
     });
   }
-  const geojson = { type: "FeatureCollection", features: feats };
 
-  // 3) Year-Month 轴 & UI 初始化
-  const yms = Array.from(new Set(geojson.features
-    .map(f => f.properties.yearmonth)
-    .filter(v => Number.isFinite(v))))
-    .sort((a, b) => a - b);
-
+  // Prepare UI lists and slider
+  const yms = Array.from(new Set(feats.map(f => f.properties.yearmonth).filter(v => Number.isFinite(v)))).sort((a, b) => a - b);
   const labels = yms.map(ymLabel);
 
   fillSelect(fromYM, labels);
@@ -109,110 +90,91 @@ if (!range || !fromYM || !toYM || !minLabel || !curLabel || !maxLabel || !boroug
   curLabel.textContent = labels[range.value] || "–";
   maxLabel.textContent = labels[range.max] || "–";
 
-  // Borough 下拉
   const boroughs = Array.from(boroughSet).sort();
-  boroughSel.innerHTML = `<option value="">All</option>` +
-    boroughs.map(b => `<option value="${b}">${b}</option>`).join("");
+  boroughSel.innerHTML = `<option value="">All</option>` + boroughs.map(b => `<option value="${b}">${b}</option>`).join("");
 
-  // 4) 地图加载后挂载源与图层
-  map.on("load", () => {
-    map.addSource("ghost_bikes", { type: "geojson", data: geojson });
+  // Create Leaflet markers and keep them for filtering
+  const markers = feats.map(f => {
+    const [lon, lat] = f.geometry.coordinates;
+    const props = f.properties || {};
+    const marker = L.circleMarker([lat, lon], {
+      color: '#c1121f',
+      fillColor: '#ffffff',
+      weight: 1.2,
+      radius: 6,
+      fillOpacity: 0.95
+    });
 
-    map.addLayer({
-      id: "ghost_bikes_circles",
-      type: "circle",
-      source: "ghost_bikes",
-      paint: {
-        "circle-color": "#ffffff",
-        "circle-opacity": 0.95,
-        "circle-stroke-color": "#c1121f",
-        "circle-stroke-width": 1.2,
-        "circle-radius": 4.5
+    const popupHtml = `
+      <div style="font:14px/1.45 system-ui">
+        <div style="font-weight:700;margin-bottom:4px;">${props.title || 'Ghost Bike'}</div>
+        <div><b>Date:</b> ${props.date || 'N/A'}</div>
+        ${props.age ? `<div><b>Age:</b> ${props.age}</div>` : ''}
+        ${props.borough ? `<div><b>Borough:</b> ${props.borough}</div>` : ''}
+        ${props.address ? `<div style="margin-top:4px;"><b>Address:</b> ${props.address}</div>` : ''}
+        ${props.narrative ? `<div style="margin-top:6px;">${props.narrative}</div>` : ''}
+      </div>`;
+
+    marker.bindPopup(popupHtml, { maxWidth: 320 });
+    marker.bindTooltip(props.title || 'Ghost Bike', { direction: 'top', offset: [0, -8] });
+
+    // hover to open tooltip (unless labels are permanently shown)
+    marker.on('mouseover', function () { this.openTooltip(); });
+    marker.on('mouseout', function () { if (!labelsToggle.checked) this.closeTooltip(); });
+
+    // store properties for filtering
+    marker._props = props;
+    return marker;
+  });
+
+  // Add all markers initially to the map
+  markers.forEach(m => m.addTo(map));
+
+  // Filtering logic
+  function passesFilter(props, lo, hi, selectedBorough) {
+    const ym = Number(props.yearmonth);
+    if (!Number.isFinite(ym)) return false;
+    if (ym < lo || ym > hi) return false;
+    if (selectedBorough && props.borough !== selectedBorough) return false;
+    return true;
+  }
+
+  function applyFilter() {
+    if (!yms.length) return;
+    const iFrom = Math.min(+fromYM.value, +toYM.value);
+    const iTo   = Math.max(+fromYM.value, +toYM.value);
+    const lo = yms[iFrom], hi = yms[iTo];
+
+    const curIdx = +range.value;
+    curLabel.textContent = labels[curIdx] || "–";
+
+    const selectedBorough = boroughSel.value;
+
+    markers.forEach(m => {
+      const ok = passesFilter(m._props, lo, hi, selectedBorough);
+      if (ok) {
+        if (!map.hasLayer(m)) m.addTo(map);
+      } else {
+        if (map.hasLayer(m)) map.removeLayer(m);
       }
     });
+  }
 
-    map.addLayer({
-      id: "ghost_bikes_labels",
-      type: "symbol",
-      source: "ghost_bikes",
-      layout: {
-        "text-field": ["coalesce", ["get", "title"], "Ghost Bike"],
-        "text-size": 11,
-        "text-offset": [0, 1.0],
-        "text-allow-overlap": false,
-        "visibility": labelsToggle.checked ? "visible" : "none"
-      },
-      paint: {
-        "text-color": "#374151",
-        "text-halo-color": "#ffffff",
-        "text-halo-width": 1
-      },
-      minzoom: 13.5
-    });
+  // Events
+  fromYM.addEventListener('change', applyFilter);
+  toYM.addEventListener('change', applyFilter);
+  boroughSel.addEventListener('change', applyFilter);
+  range.addEventListener('input', () => { curLabel.textContent = labels[+range.value] || '–'; });
+  range.addEventListener('change', applyFilter);
 
-    // 交互
-    const hoverPopup = new maplibregl.Popup({ closeButton: false, closeOnClick: false });
-    map.on("mousemove", "ghost_bikes_circles", (e) => {
-      map.getCanvas().style.cursor = "pointer";
-      const f = e.features?.[0];
-      if (!f) return;
-      const name = f.properties?.title || "Ghost Bike";
-      hoverPopup.setLngLat(e.lngLat).setHTML(`<div style="font-weight:600">${name}</div>`).addTo(map);
-    });
-    map.on("mouseleave", "ghost_bikes_circles", () => {
-      map.getCanvas().style.cursor = "";
-      hoverPopup.remove();
-    });
-
-    map.on("click", "ghost_bikes_circles", (e) => {
-      const p = e.features?.[0]?.properties || {};
-      const html = `
-        <div style="font:14px/1.45 system-ui">
-          <div style="font-weight:700;margin-bottom:4px;">${p.title || "Ghost Bike"}</div>
-          <div><b>Date:</b> ${p.date || "N/A"}</div>
-          ${p.age ? `<div><b>Age:</b> ${p.age}</div>` : ""}
-          ${p.borough ? `<div><b>Borough:</b> ${p.borough}</div>` : ""}
-          ${p.address ? `<div style="margin-top:4px;"><b>Address:</b> ${p.address}</div>` : ""}
-          ${p.narrative ? `<div style="margin-top:6px;">${p.narrative}</div>` : ""}
-        </div>`;
-      new maplibregl.Popup({ offset: 12 }).setLngLat(e.lngLat).setHTML(html).addTo(map);
-    });
-
-    // 过滤
-    function applyFilter() {
-      if (!yms.length) return;
-      const iFrom = Math.min(+fromYM.value, +toYM.value);
-      const iTo   = Math.max(+fromYM.value, +toYM.value);
-      const lo = yms[iFrom], hi = yms[iTo];
-
-      const curIdx = +range.value;
-      curLabel.textContent = labels[curIdx] || "–";
-
-      const timeFilter = [
-        "all",
-        [">=", ["to-number", ["get", "yearmonth"]], lo],
-        ["<=", ["to-number", ["get", "yearmonth"]], hi]
-      ];
-      const selectedBorough = boroughSel.value;
-      const fullFilter = selectedBorough
-        ? ["all", ...timeFilter.slice(1), ["==", ["get", "borough"], selectedBorough]]
-        : timeFilter;
-
-      map.setFilter("ghost_bikes_circles", fullFilter);
-      map.setFilter("ghost_bikes_labels",  fullFilter);
+  labelsToggle.addEventListener('change', () => {
+    if (labelsToggle.checked) {
+      markers.forEach(m => m.openTooltip());
+    } else {
+      markers.forEach(m => m.closeTooltip());
     }
-
-    // 事件
-    fromYM.addEventListener("change", applyFilter);
-    toYM.addEventListener("change", applyFilter);
-    boroughSel.addEventListener("change", applyFilter);
-    range.addEventListener("input",  () => { curLabel.textContent = labels[+range.value] || "–"; });
-    range.addEventListener("change", applyFilter);
-    labelsToggle.addEventListener("change", () => {
-      map.setLayoutProperty("ghost_bikes_labels", "visibility", labelsToggle.checked ? "visible" : "none");
-    });
-
-    // 初始过滤
-    applyFilter();
   });
+
+  // initial filter
+  applyFilter();
 })();
