@@ -1,8 +1,6 @@
 Basemap
-The basemap style was created in Maputnik with custom layer and color adjustments.
-The map uses Protomaps tiles and glyphs via a Protomaps API key.
-Tile and glyph URLs were added manually, and the map center/zoom were set to NYC.
-I attempted to link my exported style.json directly into MapLibre, but due to unresolved path and asset-loading issues, I was not able to load the style successfully. I instead rebuilt the needed basemap properties manually in the JavaScript setup.
+I originally created a custom basemap style in Maputnik, but I was unable to load the exported style.json into MapLibre due to unresolved asset-path and style-loading issues.
+Because of this, I switched to using an open-source basemap configuration and rebuilt the necessary layer and color settings directly in my JavaScript setup.
 
 Data
 The dataset (Ghost_Bikes_with_google_coords.csv) is my compiled ghost bike point data from HW02 Making Data + Narrative Building.
